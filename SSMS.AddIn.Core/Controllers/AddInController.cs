@@ -118,7 +118,7 @@ namespace SSMS.AddInHelp.Core.Controller
 
         private string FormatMessage(string msg, MessageType msgType)
         {
-            return string.Format("[{0:HH:mm:ss}][{1}]: {2}", DateTime.Now, MessageTypeToString(msgType), msg);
+            return string.Format("[{0:yy/MM/dd HH:mm:ss}][{1}]: {2}", DateTime.Now, MessageTypeToString(msgType), msg);
         }
 
         private bool LogMessageToWindow(string msg, MessageType msgType)
@@ -230,6 +230,8 @@ namespace SSMS.AddInHelp.Core.Controller
                 addinCommand.Delete();
                 Command addinCommand2 = commands.Item("SSMSQuotes.Connect.ReplaceQuotes");
                 addinCommand2.Delete();
+                Command addinCommand3 = commands.Item("SSMSQuotes.Connect.RemoveQuotes");
+                addinCommand3.Delete();
                 Command cmdLogFile = commands.Item("SSMSQuotes.Connect.LogWindow");
                 cmdLogFile.Delete();
             }
@@ -295,6 +297,11 @@ namespace SSMS.AddInHelp.Core.Controller
                             ReplaceQuotes();
                             Handled = true;
                             return;
+                        case "SSMSQuotes.Connect.RemoveQuotes":
+                            LogMessage("Selected SSMSQuotes - RemoveQuotes Menu Item.");
+                            RemoveQuotes();
+                            Handled = true;
+                            return;
                         case "SSMSQuotes.Connect.LogWindow":
                             LogMessage(string.Format("Selected LogWindow Menu Item. Setting visibility to {0}", (!_logWindow.Window.Visible).ToString()));
                             ShowHideLogwindow();
@@ -317,6 +324,7 @@ namespace SSMS.AddInHelp.Core.Controller
                 {
                     case "SSMSQuotes.Connect.AddQuotes":
                     case "SSMSQuotes.Connect.ReplaceQuotes":
+                    case "SSMSQuotes.Connect.RemoveQuotes":
                     case "SSMSQuotes.Connect.LogWindow":
                         StatusOption = (vsCommandStatus)vsCommandStatus.vsCommandStatusSupported | vsCommandStatus.vsCommandStatusEnabled;
                         return;
@@ -342,6 +350,8 @@ namespace SSMS.AddInHelp.Core.Controller
             CommandBarPopup myAddinMenu = menuBarCommandBar.Controls.Add(MsoControlType.msoControlPopup, Type.Missing, Type.Missing, toolsControl.Index, true) as CommandBarPopup;
             myAddinMenu.Caption = "SSMSQuotes";
 
+            int position = 1;
+
             //Code for the shortcut keys
             //EX: Global::ALT+A
             object[] bindings = new object[1];
@@ -354,27 +364,48 @@ namespace SSMS.AddInHelp.Core.Controller
                 if ((cmdQuotes != null) && (myAddinMenu != null))
                 {
                     cmdQuotes.Bindings = bindings;
-                    cmdQuotes.AddControl(myAddinMenu.CommandBar, 1);
+                    cmdQuotes.AddControl(myAddinMenu.CommandBar, position);
                 }
             }
             catch (System.ArgumentException)
             {
                 //Command already exists, do not create it
             }
+            position++;
 
+            bindings[0] = "Text Editor::F6";
             try
             {
-                Command cmdQuotes = commands.AddNamedCommand2(_addInInstance, "ReplaceQuotes", "Add Escape Quotes", "Adds escape quotes to all single quotes in selected text", true, 59, ref contextGUIDS, (int)vsCommandStatus.vsCommandStatusSupported + (int)vsCommandStatus.vsCommandStatusEnabled, (int)vsCommandStyle.vsCommandStylePictAndText, vsCommandControlType.vsCommandControlTypeButton);
+                Command cmdQuotes = commands.AddNamedCommand2(_addInInstance, "ReplaceQuotes", "Add Escape Quotes", "Adds escape quotes to all single quotes in selected text", true, 60, ref contextGUIDS, (int)vsCommandStatus.vsCommandStatusSupported + (int)vsCommandStatus.vsCommandStatusEnabled, (int)vsCommandStyle.vsCommandStylePictAndText, vsCommandControlType.vsCommandControlTypeButton);
 
                 if ((cmdQuotes != null) && (myAddinMenu != null))
                 {
-                    cmdQuotes.AddControl(myAddinMenu.CommandBar, 2);
+                    cmdQuotes.Bindings = bindings;
+                    cmdQuotes.AddControl(myAddinMenu.CommandBar, position);
                 }
             }
             catch (System.ArgumentException)
             {
                 //Command already exists, do not create it
             }
+            position++;
+
+            bindings[0] = "Text Editor::ALT+F6";
+            try
+            {
+                Command cmdQuotes = commands.AddNamedCommand2(_addInInstance, "RemoveQuotes", "Remove Escape Quotes", "Removes escape quotes in selected text", true, 61, ref contextGUIDS, (int)vsCommandStatus.vsCommandStatusSupported + (int)vsCommandStatus.vsCommandStatusEnabled, (int)vsCommandStyle.vsCommandStylePictAndText, vsCommandControlType.vsCommandControlTypeButton);
+
+                if ((cmdQuotes != null) && (myAddinMenu != null))
+                {
+                    cmdQuotes.Bindings = bindings;
+                    cmdQuotes.AddControl(myAddinMenu.CommandBar, position);
+                }
+            }
+            catch (System.ArgumentException)
+            {
+                //Command already exists, do not create it
+            }
+            position++;
 
             try
             {
@@ -382,13 +413,14 @@ namespace SSMS.AddInHelp.Core.Controller
 
                 if ((cmdLogWindow != null) && (myAddinMenu != null))
                 {
-                    cmdLogWindow.AddControl(myAddinMenu.CommandBar, 3);
+                    cmdLogWindow.AddControl(myAddinMenu.CommandBar, position);
                 }
             }
             catch (System.ArgumentException)
             {
                 //Command already exists, do not create it
             }
+            position++;
         }
 
         #region Menu Items
@@ -446,6 +478,37 @@ namespace SSMS.AddInHelp.Core.Controller
                 string finalText = "";
 
                 finalText = "'" + selectedText.Replace("'", "''") + "'";
+
+                //Replace the text in the currently selected section
+                ((TextSelection)_applicationObject.ActiveWindow.Selection).Insert(finalText, (int)EnvDTE.vsInsertFlags.vsInsertFlagsContainNewText);
+            }
+        }
+
+        private void RemoveQuotes()
+        {
+            string selectedText = "";
+            try
+            {
+                selectedText = ((TextSelection)_applicationObject.ActiveWindow.Selection).Text;
+            }
+            catch (Exception ex)
+            {
+                LogMessage("No text selected.");
+                LogError("Error - RemoveQuotes: " + ex.Message);
+                return;
+            }
+
+            if (selectedText != null || selectedText != string.Empty)
+            {
+                LogMessage("Text is selected");
+
+                string finalText = "";
+                if (selectedText.ToCharArray().First() == '\'' && selectedText.ToCharArray().Last() == '\'')
+                {
+                    selectedText = selectedText.Substring(1, selectedText.Length - 2);
+                }
+
+                finalText = selectedText.Replace("''", "'");
 
                 //Replace the text in the currently selected section
                 ((TextSelection)_applicationObject.ActiveWindow.Selection).Insert(finalText, (int)EnvDTE.vsInsertFlags.vsInsertFlagsContainNewText);
